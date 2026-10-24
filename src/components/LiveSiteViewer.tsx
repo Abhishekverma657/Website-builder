@@ -9,7 +9,6 @@ import {
   ShoppingBag,
   Info,
   X,
-  Share2,
 } from 'lucide-react';
 import { FULL_TEMPLATES_CATALOG } from '../templates/templatesCatalog';
 import { BreakpointOverrideContext, PreviewOverrideContext } from '../context/BuilderContext';
@@ -32,7 +31,6 @@ export const LiveSiteViewer: React.FC<LiveSiteViewerProps> = ({ siteSlug }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [showBackToTop, setShowBackToTop] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [liveBreakpoint, setLiveBreakpoint] = useState<Breakpoint>(() => {
     if (typeof window === 'undefined') return 'desktop';
     const w = window.innerWidth;
@@ -108,7 +106,7 @@ export const LiveSiteViewer: React.FC<LiveSiteViewerProps> = ({ siteSlug }) => {
   // Set document title dynamically
   useEffect(() => {
     if (siteName) {
-      document.title = `${siteName} — Built with Aura Studio`;
+      document.title = siteName;
     }
   }, [siteName]);
 
@@ -150,12 +148,6 @@ export const LiveSiteViewer: React.FC<LiveSiteViewerProps> = ({ siteSlug }) => {
     window.addEventListener('aura:toast', handleToastEvent);
     return () => window.removeEventListener('aura:toast', handleToastEvent);
   }, []);
-
-  const handleCopyShareUrl = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
-  };
 
   if (loading) {
     return (
@@ -238,34 +230,6 @@ export const LiveSiteViewer: React.FC<LiveSiteViewerProps> = ({ siteSlug }) => {
           <ArrowUp className="w-4 h-4" />
         </button>
       )}
-
-      {/* Floating Bottom Publisher Bar */}
-      <div className="fixed bottom-4 right-4 z-[9999] flex items-center gap-2 bg-[#091111]/90 backdrop-blur-md text-white border border-emerald-500/30 px-3.5 py-1.5 rounded-full shadow-2xl text-xs font-sans">
-        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-        <span className="text-gray-300 text-[11px]">
-          Published via <strong className="text-emerald-400 font-semibold">Aura Studio</strong>
-        </span>
-
-        <button
-          onClick={handleCopyShareUrl}
-          title="Share URL"
-          className="ml-2 pl-2 border-l border-emerald-950/80 text-gray-300 hover:text-emerald-300 text-[11px] font-medium flex items-center gap-1 transition"
-        >
-          <Share2 className="w-3 h-3" />
-          <span>{copiedLink ? 'Copied!' : 'Share'}</span>
-        </button>
-
-        <button
-          onClick={() => {
-            window.location.hash = '';
-            window.location.search = '';
-          }}
-          className="pl-2 border-l border-emerald-950/80 text-teal-300 hover:text-white text-[11px] font-semibold flex items-center gap-1 transition"
-        >
-          <ArrowLeft className="w-3 h-3" />
-          <span>Editor</span>
-        </button>
-      </div>
 
       {/* Render the full interactive website sections with pure preview and responsive breakpoint */}
       <PreviewOverrideContext.Provider value={true}>
