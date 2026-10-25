@@ -73,12 +73,11 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose }) =
   };
 
   const handleOpenLiveSite = () => {
-    if (typeof window !== 'undefined' && !isHosted) {
-      // If testing locally, open local viewer
-      window.open(`/?site=${slug}`, '_blank');
-    } else {
-      window.open(liveUrl, '_blank');
-    }
+    window.open(liveUrl, '_blank');
+  };
+
+  const handleOpenLocalTest = () => {
+    window.open(`/?site=${slug}`, '_blank');
   };
 
   return (
@@ -179,6 +178,17 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose }) =
                   <span>Share URL</span>
                 </button>
               </div>
+
+              {!isHosted && (
+                <div className="pt-1 text-center">
+                  <button
+                    onClick={handleOpenLocalTest}
+                    className="text-[11px] text-gray-400 hover:text-emerald-400 underline transition"
+                  >
+                    Or open local preview (localhost:3000/?site={slug})
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
