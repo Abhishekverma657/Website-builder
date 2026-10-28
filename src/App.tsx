@@ -78,15 +78,26 @@ const BuilderWorkspace: React.FC = () => {
 
 const getSlugFromLocation = (): string | null => {
   const searchParams = new URLSearchParams(window.location.search);
-  if (searchParams.has('view')) return searchParams.get('view');
-  if (searchParams.has('site')) return searchParams.get('site');
+  if (searchParams.has('site')) {
+    const s = searchParams.get('site');
+    if (s) return decodeURIComponent(s).trim();
+  }
+  if (searchParams.has('view')) {
+    const v = searchParams.get('view');
+    if (v) return decodeURIComponent(v).trim();
+  }
   const hash = window.location.hash;
-  if (hash.startsWith('#/view/')) return hash.replace('#/view/', '');
-  if (hash.startsWith('#view=')) return hash.replace('#view=', '');
-  if (hash.startsWith('#site=')) return hash.replace('#site=', '');
+  if (hash.startsWith('#/view/')) return decodeURIComponent(hash.replace('#/view/', '')).trim();
+  if (hash.startsWith('#/live/')) return decodeURIComponent(hash.replace('#/live/', '')).trim();
+  if (hash.startsWith('#view=')) return decodeURIComponent(hash.replace('#view=', '')).trim();
+  if (hash.startsWith('#site=')) return decodeURIComponent(hash.replace('#site=', '')).trim();
   if (window.location.pathname.startsWith('/sites/')) {
     const parts = window.location.pathname.split('/');
-    if (parts[2]) return parts[2];
+    if (parts[2]) return decodeURIComponent(parts[2]).trim();
+  }
+  if (window.location.pathname.startsWith('/live/')) {
+    const parts = window.location.pathname.split('/');
+    if (parts[2]) return decodeURIComponent(parts[2]).trim();
   }
   return null;
 };

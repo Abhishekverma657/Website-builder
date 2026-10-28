@@ -11,10 +11,62 @@ import {
   X,
 } from 'lucide-react';
 import { FULL_TEMPLATES_CATALOG } from '../templates/templatesCatalog';
+import { initialElements } from '../templates/initialProject';
+import { WebsiteTemplate } from '../templates/types';
 import { BreakpointOverrideContext, PreviewOverrideContext } from '../context/BuilderContext';
 
 interface LiveSiteViewerProps {
   siteSlug: string;
+}
+
+const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const toSlug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+function findTemplateBySlug(slug: string, catalog: WebsiteTemplate[]): WebsiteTemplate | undefined {
+  if (!slug) return undefined;
+  const target = slug.trim().toLowerCase();
+  const targetClean = clean(target);
+  const targetSlug = toSlug(target);
+
+  // 1. Exact ID match (e.g. 'ecom-velvet' === 'ecom-velvet')
+  let found = catalog.find((t) => t.id.toLowerCase() === target);
+  if (found) return found;
+
+  // 2. ID clean match (e.g. 'ecomvelvet' === 'ecomvelvet')
+  found = catalog.find((t) => clean(t.id) === targetClean);
+  if (found) return found;
+
+  // 3. Name slug match (e.g. toSlug('Velvet & Clay') -> 'velvet-clay' === 'velvet-clay')
+  found = catalog.find((t) => toSlug(t.name || '') === targetSlug);
+  if (found) return found;
+
+  // 4. Clean Name match (e.g. clean('Velvet & Clay') -> 'velvetclay' === 'velvetclay')
+  found = catalog.find((t) => clean(t.name || '') === targetClean);
+  if (found) return found;
+
+  // 5. Match without category prefix on id (e.g. 'ecom-velvet' -> 'velvet' vs 'velvet-clay')
+  found = catalog.find((t) => {
+    const idWithoutCategory = t.id.replace(/^[a-z]+-/, '');
+    return targetSlug.includes(idWithoutCategory) || idWithoutCategory.includes(targetSlug);
+  });
+  if (found) return found;
+
+  // 6. Substring match on name or ID
+  found = catalog.find((t) => {
+    const tClean = clean(t.name || '');
+    const tIdClean = clean(t.id);
+    return (
+      (targetClean.length >= 3 && (tClean.includes(targetClean) || targetClean.includes(tClean))) ||
+      (targetClean.length >= 3 && (tIdClean.includes(targetClean) || targetClean.includes(tIdClean)))
+    );
+  });
+  if (found) return found;
+
+  return undefined;
 }
 
 interface ToastItem {
@@ -62,15 +114,23 @@ export const LiveSiteViewer: React.FC<LiveSiteViewerProps> = ({ siteSlug }) => {
           setLoading(false);
           return;
         }
+
+        // Fuzzy match across published registry keys
+        const targetClean = clean(siteSlug);
+        const targetSlug = toSlug(siteSlug);
+        const foundKey = Object.keys(parsed).find(
+          (k) => clean(k) === targetClean || toSlug(k) === targetSlug
+        );
+        if (foundKey && parsed[foundKey]) {
+          setElements(parsed[foundKey].elements);
+          setSiteName(parsed[foundKey].name || foundKey);
+          setLoading(false);
+          return;
+        }
       }
 
-      // 2. Look in 50+ Prebuilt Templates catalog (instant preview by template id / slug)
-      const normalizedSlug = siteSlug.toLowerCase().trim();
-      const foundTemplate = FULL_TEMPLATES_CATALOG.find(
-        (t) =>
-          t.id === normalizedSlug ||
-          (t.name && t.name.toLowerCase().replace(/[^a-z0-9]/g, '-') === normalizedSlug)
-      );
+      // 2. Look in 50+ Prebuilt Templates catalog (instant preview by template id / slug / fuzzy match)
+      const foundTemplate = findTemplateBySlug(siteSlug, FULL_TEMPLATES_CATALOG);
       if (foundTemplate && foundTemplate.elements && foundTemplate.elements.length > 0) {
         setElements(foundTemplate.elements);
         setSiteName(foundTemplate.name);
@@ -79,17 +139,36 @@ export const LiveSiteViewer: React.FC<LiveSiteViewerProps> = ({ siteSlug }) => {
         return;
       }
 
-      // 3. Fallback to active projects
+      // 3. Fallback for initial project / aura studio
+      const targetSlug = toSlug(siteSlug);
+      if (
+        targetSlug === 'aura-site' ||
+        targetSlug === 'aura-studio' ||
+        targetSlug === 'aura' ||
+        targetSlug === 'default'
+      ) {
+        setElements(initialElements);
+        setSiteName('Aura Studio');
+        setIsDarkTheme(false);
+        setLoading(false);
+        return;
+      }
+
+      // 4. Fallback to active projects
       const storedProjects =
         localStorage.getItem('webflow_saved_projects_v2') ||
         localStorage.getItem('webflow_saved_projects_v1');
       if (storedProjects) {
         const list = JSON.parse(storedProjects);
-        const found = list.find(
-          (p: any) =>
+        const found = list.find((p: any) => {
+          const pNameSlug = toSlug(p.name || '');
+          const pClean = clean(p.name || '');
+          return (
             p.id === siteSlug ||
-            (p.name && p.name.toLowerCase().replace(/[^a-z0-9]/g, '-') === siteSlug)
-        );
+            pNameSlug === targetSlug ||
+            pClean === clean(siteSlug)
+          );
+        });
         if (found && found.pages && found.pages[0]) {
           setElements(found.pages[0].elements);
           setSiteName(found.name);
@@ -165,20 +244,52 @@ export const LiveSiteViewer: React.FC<LiveSiteViewerProps> = ({ siteSlug }) => {
           <Sparkles className="w-8 h-8" />
         </div>
         <h2 className="text-xl font-bold mb-2">Website Not Found</h2>
-        <p className="text-sm text-gray-400 max-w-md mb-6">
+        <p className="text-sm text-gray-400 max-w-md mb-5">
           No published website found for slug:{' '}
           <span className="font-mono text-emerald-400">"{siteSlug}"</span>.
         </p>
-        <button
-          onClick={() => {
-            window.location.hash = '';
-            window.location.search = '';
-          }}
-          className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold text-xs shadow-neu hover:brightness-110 transition flex items-center gap-2"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Return to Studio Builder</span>
-        </button>
+
+        <div className="flex items-center gap-3 mb-8">
+          <button
+            onClick={() => {
+              window.location.hash = '';
+              window.location.search = '';
+            }}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold text-xs shadow-neu hover:brightness-110 transition flex items-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Open Studio Builder</span>
+          </button>
+        </div>
+
+        {/* Quick Launch Showcase of Popular Templates */}
+        <div className="w-full max-w-xl bg-[#0c1414] border border-emerald-500/25 rounded-2xl p-5 text-left shadow-2xl">
+          <div className="flex items-center justify-between mb-3 border-b border-emerald-950/80 pb-2">
+            <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
+              Explore Available Live Templates
+            </span>
+            <span className="text-[10px] text-gray-400">50+ Templates Ready</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {FULL_TEMPLATES_CATALOG.slice(0, 6).map((t) => (
+              <button
+                key={t.id}
+                onClick={() => {
+                  window.location.search = `?site=${toSlug(t.name || t.id)}`;
+                }}
+                className="p-2.5 rounded-xl bg-[#080d0d] hover:bg-[#121c1c] border border-emerald-950/60 hover:border-emerald-500/40 text-left transition flex items-center justify-between group"
+              >
+                <div>
+                  <div className="text-xs font-semibold text-white group-hover:text-emerald-300">
+                    {t.name}
+                  </div>
+                  <div className="text-[10px] text-gray-400">{t.category}</div>
+                </div>
+                <span className="text-[10px] font-mono text-emerald-400">View →</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
