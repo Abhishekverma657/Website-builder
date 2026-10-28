@@ -15,6 +15,14 @@ import { initialElements } from '../templates/initialProject';
 import { WebsiteTemplate } from '../templates/types';
 import { BreakpointOverrideContext, PreviewOverrideContext } from '../context/BuilderContext';
 
+const safeGetLocalStorage = (key: string): string | null => {
+  try {
+    return typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem(key) : null;
+  } catch (e) {
+    return null;
+  }
+};
+
 interface LiveSiteViewerProps {
   siteSlug: string;
 }
@@ -104,32 +112,7 @@ export const LiveSiteViewer: React.FC<LiveSiteViewerProps> = ({ siteSlug }) => {
 
   useEffect(() => {
     try {
-      // 1. Look in published sites registry (from local publish)
-      const publishedRegistry = localStorage.getItem('webflow_published_sites_v1');
-      if (publishedRegistry) {
-        const parsed = JSON.parse(publishedRegistry);
-        if (parsed[siteSlug]) {
-          setElements(parsed[siteSlug].elements);
-          setSiteName(parsed[siteSlug].name || siteSlug);
-          setLoading(false);
-          return;
-        }
-
-        // Fuzzy match across published registry keys
-        const targetClean = clean(siteSlug);
-        const targetSlug = toSlug(siteSlug);
-        const foundKey = Object.keys(parsed).find(
-          (k) => clean(k) === targetClean || toSlug(k) === targetSlug
-        );
-        if (foundKey && parsed[foundKey]) {
-          setElements(parsed[foundKey].elements);
-          setSiteName(parsed[foundKey].name || foundKey);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // 2. Look in 50+ Prebuilt Templates catalog (instant preview by template id / slug / fuzzy match)
+      // 1. Look in 50+ Prebuilt Templates catalog FIRST (instant zero-storage lookup)
       const foundTemplate = findTemplateBySlug(siteSlug, FULL_TEMPLATES_CATALOG);
       if (foundTemplate && foundTemplate.elements && foundTemplate.elements.length > 0) {
         setElements(foundTemplate.elements);
@@ -139,7 +122,7 @@ export const LiveSiteViewer: React.FC<LiveSiteViewerProps> = ({ siteSlug }) => {
         return;
       }
 
-      // 3. Fallback for initial project / aura studio
+      // 2. Fallback for initial project / aura studio
       const targetSlug = toSlug(siteSlug);
       if (
         targetSlug === 'aura-site' ||
@@ -154,26 +137,58 @@ export const LiveSiteViewer: React.FC<LiveSiteViewerProps> = ({ siteSlug }) => {
         return;
       }
 
+      // 3. Look in published sites registry (from local publish, safely guarded)
+      const publishedRegistry = safeGetLocalStorage('webflow_published_sites_v1');
+      if (publishedRegistry) {
+        try {
+          const parsed = JSON.parse(publishedRegistry);
+          if (parsed[siteSlug]) {
+            setElements(parsed[siteSlug].elements);
+            setSiteName(parsed[siteSlug].name || siteSlug);
+            setLoading(false);
+            return;
+          }
+
+          // Fuzzy match across published registry keys
+          const targetClean = clean(siteSlug);
+          const foundKey = Object.keys(parsed).find(
+            (k) => clean(k) === targetClean || toSlug(k) === targetSlug
+          );
+          if (foundKey && parsed[foundKey]) {
+            setElements(parsed[foundKey].elements);
+            setSiteName(parsed[foundKey].name || foundKey);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.warn(err);
+        }
+      }
+
       // 4. Fallback to active projects
       const storedProjects =
-        localStorage.getItem('webflow_saved_projects_v2') ||
-        localStorage.getItem('webflow_saved_projects_v1');
+        safeGetLocalStorage('webflow_saved_projects_v2') ||
+        safeGetLocalStorage('webflow_saved_projects_v1');
       if (storedProjects) {
-        const list = JSON.parse(storedProjects);
-        const found = list.find((p: any) => {
-          const pNameSlug = toSlug(p.name || '');
-          const pClean = clean(p.name || '');
-          return (
-            p.id === siteSlug ||
-            pNameSlug === targetSlug ||
-            pClean === clean(siteSlug)
-          );
-        });
-        if (found && found.pages && found.pages[0]) {
-          setElements(found.pages[0].elements);
-          setSiteName(found.name);
-          setLoading(false);
-          return;
+        try {
+          const list = JSON.parse(storedProjects);
+          const found = list.find((p: any) => {
+            const pNameSlug = toSlug(p.name || '');
+            const pClean = clean(p.name || '');
+            return (
+              p.id === siteSlug ||
+              pNameSlug === targetSlug ||
+              pClean === clean(siteSlug)
+            );
+          });
+          if (found && found.pages && found.pages[0]) {
+            setElements(found.pages[0].elements);
+            setSiteName(found.name);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.warn(err);
         }
       }
     } catch (e) {
